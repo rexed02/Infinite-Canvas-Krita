@@ -4,13 +4,13 @@ Just download it as a zip file and that's it
 
 # Options:
 
-Disable/Enable: enables and disable real time tracking
-Overlay: Shows the stuff outside Canvas
-No Color: Erase the external boundaries color
-Crop: It creates a hole in the middle that doesnt update the overlay in that area
-Edges: Black outline on the canvas edges
-Op: Opacity of the Overlay
-Color square: For choose the color of the external boundaries
+- Disable/Enable: enables and disable real time tracking
+- Overlay: Shows the stuff outside Canvas
+- No Color: Erase the external boundaries color
+- Crop: It creates a hole in the middle that doesnt update the overlay in that area
+- Edges: Black outline on the canvas edges
+- Op: Opacity of the Overlay
+- Color square: For choose the color of the external boundaries
 Modes:
 - Normal
 - Wide
