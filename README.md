@@ -13,11 +13,11 @@ Just download it as a zip file and that's it
 - Color square: For choose the color of the external boundaries
 
 # Modes:
-
+(This is for how close is rendering near the cursor, if it's highier worst performance but better covered area)
 - Normal
 - Wide
 - Ultra
-(This is for how close is rendering near the cursor, if it's highier worst performance but better covered area)
+
 
 * Full Document:
 Shows all the layers
