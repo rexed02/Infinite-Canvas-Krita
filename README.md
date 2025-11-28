@@ -11,16 +11,18 @@ Just download it as a zip file and that's it
 - Edges: Black outline on the canvas edges
 - Op: Opacity of the Overlay
 - Color square: For choose the color of the external boundaries
-Modes:
+
+# Modes:
+
 - Normal
 - Wide
 - Ultra
 (This is for how close is rendering near the cursor, if it's highier worst performance but better covered area)
 
-Full Document:
+* Full Document:
 Shows all the layers
 
-Current layer:
+* Current layer:
 Show only the current layer
 
 # Disclaimer:
