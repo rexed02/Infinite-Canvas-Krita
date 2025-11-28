@@ -15,7 +15,7 @@ BASE_CAMERA_SIZE = 200
 GRID_SIZE = 12
 MAX_BUFFER_SIZE = 2500 
 
-# Mapeo de modos de fusión de Krita a Qt
+# Mapeo de modos de fusión
 BLEND_MODES_MAP = {
     'normal': QPainter.CompositionMode_SourceOver,
     'multiply': QPainter.CompositionMode_Multiply,
@@ -40,20 +40,16 @@ class OverlayWidget(QWidget):
     def __init__(self, docker_ref, parent=None):
         super().__init__(parent)
         self.docker = docker_ref
-        
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_NoSystemBackground)
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.setFocusPolicy(Qt.NoFocus)
-
         self.live_stroke_buffer = None
         self.buffer_transform = QTransform()
         self.has_content = False
-        
         self.render_buffer = None
-        
         self.global_opacity = 1.0
         self.crop_enabled = False
         self.outline_enabled = False
@@ -75,8 +71,7 @@ class OverlayWidget(QWidget):
         if self.live_stroke_buffer is None or self.live_stroke_buffer.size() != size:
             self.live_stroke_buffer = QPixmap(size)
             self.live_stroke_buffer.fill(Qt.transparent)
-            self.has_content = False
-            
+            self.has_content = False   
         if self.render_buffer is None or self.render_buffer.size() != size:
             self.render_buffer = QPixmap(size)
 
@@ -88,42 +83,34 @@ class OverlayWidget(QWidget):
 
     def handle_live_patch(self, image, doc_x, doc_y, doc_w, doc_h, current_transform):
         self.ensure_buffers()
-        
         if current_transform != self.buffer_transform:
             self.live_stroke_buffer.fill(Qt.transparent)
             self.buffer_transform = current_transform
-
         painter = QPainter(self.live_stroke_buffer)
         painter.setRenderHint(QPainter.Antialiasing, False)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
         painter.setCompositionMode(QPainter.CompositionMode_Source)
         painter.setTransform(current_transform)
-        
         rect_doc = QRectF(doc_x, doc_y, doc_w, doc_h).adjusted(-0.5, -0.5, 0.5, 0.5)
         painter.drawImage(rect_doc, image)
         painter.end()
-        
         self.has_content = True
         self.update()
 
     def paintEvent(self, event):
         self.ensure_buffers()
         self.render_buffer.fill(Qt.transparent)
-
         doc = Krita.instance().activeDocument()
         view = Krita.instance().activeWindow().activeView()
         if not doc or not view: return
-
         canvas = view.canvas()
         res = doc.resolution() or 72.0
         zoom = canvas.zoomLevel()
         rotation = canvas.rotation()
         mirror = canvas.mirror()
-
         scale_factor = (72.0 / res) * zoom
         t_flake = view.flakeToCanvasTransform()
         origin = t_flake.map(QPointF(0.0, 0.0))
-
         current_transform = QTransform()
         current_transform.translate(origin.x(), origin.y())
         current_transform.rotate(rotation)
@@ -139,20 +126,18 @@ class OverlayWidget(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-        # --- GEOMETRÍA ---
         rect_doc_static = QRectF(0.0, 0.0, float(doc.width()), float(doc.height()))
         path_doc_static_local = QPainterPath()
         path_doc_static_local.addRect(rect_doc_static)
         path_doc_screen = current_transform.map(path_doc_static_local)
 
-        # Hueco Dinámico
         rect_hole = rect_doc_static 
-        if self.source_mode == 0: # Capa Actual
+        if self.source_mode == 0: 
             if doc.activeNode():
                 b = doc.activeNode().bounds()
                 if b.width() > 0:
                     rect_hole = QRectF(b.x(), b.y(), b.width(), b.height())
-        else: # Imagen Completa (Root Bounds)
+        else:
             root = doc.rootNode()
             if root:
                 b = root.bounds()
@@ -169,7 +154,6 @@ class OverlayWidget(QWidget):
         path_blue_area = path_full_screen.subtracted(path_hole_screen)
         path_outside_canvas = path_full_screen.subtracted(path_doc_screen)
 
-        # --- DIBUJO ---
         if self.crop_enabled:
             painter.setClipPath(path_outside_canvas)
 
@@ -202,7 +186,6 @@ class OverlayWidget(QWidget):
             painter.drawPath(path_doc_screen)
 
         painter.end()
-
         final_painter = QPainter(self)
         final_painter.setOpacity(self.global_opacity)
         final_painter.drawPixmap(0, 0, self.render_buffer)
@@ -213,11 +196,10 @@ class OverlayWidget(QWidget):
         super().resizeEvent(event)
 
 # =========================================================================================
-# CLASE 2: VIEWPORT 1
+# CLASE 2: VIEWPORT
 # =========================================================================================
 class MainViewportWidget(QOpenGLWidget):
     contentChanged = pyqtSignal()
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.base_pixmap = None     
@@ -226,8 +208,7 @@ class MainViewportWidget(QOpenGLWidget):
         self.show_reticle = True 
         self.grid_brush = self._create_grid_brush()
 
-    def initializeGL(self):
-        pass
+    def initializeGL(self): pass
 
     def _create_grid_brush(self):
         size = GRID_SIZE
@@ -250,7 +231,6 @@ class MainViewportWidget(QOpenGLWidget):
             self.update()
             self.contentChanged.emit()
             return
-
         if self.trail_buffer:
             if self.trail_buffer.size() != pixmap.size():
                 self.trail_buffer = QPixmap(pixmap.size())
@@ -270,14 +250,12 @@ class MainViewportWidget(QOpenGLWidget):
             painter_base.setCompositionMode(QPainter.CompositionMode_Source)
             painter_base.drawImage(int_rect, patch_image)
             painter_base.end()
-
         if self.trail_buffer:
             painter_trail = QPainter(self.trail_buffer)
             painter_trail.setRenderHint(QPainter.Antialiasing, False)
             painter_trail.setCompositionMode(QPainter.CompositionMode_Source)
             painter_trail.drawImage(int_rect, patch_image)
             painter_trail.end()
-
         self.cursor_rect = cursor_rect
         self.update() 
         self.contentChanged.emit()
@@ -291,37 +269,29 @@ class MainViewportWidget(QOpenGLWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.fillRect(self.rect(), self.grid_brush)
-
         if self.base_pixmap and not self.base_pixmap.isNull():
             w_buf = self.base_pixmap.width()
             h_buf = self.base_pixmap.height()
             w_wid = self.width()
             h_wid = self.height()
-            
             if w_buf > 0 and h_buf > 0:
                 scale = min(w_wid / w_buf, h_wid / h_buf)
             else:
                 scale = 1.0
-
             draw_w = int(w_buf * scale)
             draw_h = int(h_buf * scale)
             x = (w_wid - draw_w) // 2
             y = (h_wid - draw_h) // 2
-            
             target_rect = QRect(x, y, draw_w, draw_h)
             source_rect = self.base_pixmap.rect() 
-            
             painter.drawPixmap(target_rect, self.base_pixmap, source_rect)
-
             if self.trail_buffer:
                 painter.drawPixmap(target_rect, self.trail_buffer, source_rect)
-
             if self.show_reticle and self.cursor_rect:
                 painter.setRenderHint(QPainter.Antialiasing, False)
                 pen = QPen(QColor(0, 120, 255))
                 pen.setWidth(2)
                 painter.setPen(pen)
-                
                 cx = (self.cursor_rect.x() * scale) + x
                 cy = (self.cursor_rect.y() * scale) + y
                 cw = self.cursor_rect.width() * scale
@@ -340,7 +310,6 @@ class CameraPreviewWidget(QWidget):
         self.image = None
         self.grid_brush = self._create_grid_brush()
         self.setFixedSize(300, 300) 
-
     def _create_grid_brush(self):
         size = GRID_SIZE
         pixmap = QPixmap(size * 2, size * 2)
@@ -350,11 +319,9 @@ class CameraPreviewWidget(QWidget):
         painter.fillRect(size, size, size, size, QColor(255, 255, 255))
         painter.end()
         return QBrush(pixmap)
-
     def update_image(self, image):
         self.image = image
         self.repaint() 
-
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.fillRect(self.rect(), self.grid_brush)
@@ -365,7 +332,7 @@ class CameraPreviewWidget(QWidget):
             painter.drawImage(x, y, scaled_img)
 
 # =========================================================================================
-# CLASE 4: INTERCEPTOR (MANUAL BLENDING RECURSIVO & INPUT)
+# CLASE 4: INTERCEPTOR
 # =========================================================================================
 class ViewState:
     def __init__(self):
@@ -379,7 +346,6 @@ class ViewState:
 class InputInterceptor(QObject):
     stroke_finished = pyqtSignal()
     live_patch_ready = pyqtSignal(QImage, float, float, float, float, QTransform) 
-    action_triggered = pyqtSignal() # Undo/Redo/Delete
 
     def __init__(self, view_state, main_viewport, camera_preview):
         super().__init__()
@@ -396,7 +362,6 @@ class InputInterceptor(QObject):
 
     def set_multiplier(self, mult):
         self.size_multiplier = mult
-        
     def set_mode(self, mode):
         self.source_mode = mode
 
@@ -404,27 +369,6 @@ class InputInterceptor(QObject):
         if not self.active: return False
         etype = event.type()
         
-        # --- DETECCIÓN DE TECLADO (Undo/Redo/Delete) ---
-        if etype == QEvent.KeyPress:
-            key = event.key()
-            mods = event.modifiers()
-            
-            # Detectar Ctrl+Z (Undo)
-            if (mods & Qt.ControlModifier) and key == Qt.Key_Z:
-                self.action_triggered.emit()
-            
-            # Detectar Ctrl+Y (Redo) o Ctrl+Shift+Z
-            elif (mods & Qt.ControlModifier) and key == Qt.Key_Y:
-                self.action_triggered.emit()
-            elif (mods & Qt.ControlModifier) and (mods & Qt.ShiftModifier) and key == Qt.Key_Z:
-                self.action_triggered.emit()
-                
-            # Detectar Delete o Backspace
-            elif key == Qt.Key_Delete or key == Qt.Key_Backspace:
-                self.action_triggered.emit()
-            
-            return False
-
         if not self.view_state.valid: return False
         
         modifiers = QApplication.keyboardModifiers()
@@ -459,45 +403,33 @@ class InputInterceptor(QObject):
     def _calculate_geometry(self, global_pos):
         doc_pt = self.map_pos_to_document_absolute(global_pos)
         if not doc_pt: return None
-
         vs = self.view_state
         rel_x = doc_pt.x() - vs.src_rect.x()
         rel_y = doc_pt.y() - vs.src_rect.y()
         center_widget_x = (rel_x * vs.scale) 
         center_widget_y = (rel_y * vs.scale) 
-        
         crop_size = int(BASE_CAMERA_SIZE * self.size_multiplier)
         crop_x = int(doc_pt.x() - crop_size / 2)
         crop_y = int(doc_pt.y() - crop_size / 2)
-        
         patch_display_size = crop_size * vs.scale
         dest_x = center_widget_x - (patch_display_size / 2.0)
         dest_y = center_widget_y - (patch_display_size / 2.0)
         dest_rect = QRectF(dest_x, dest_y, patch_display_size, patch_display_size)
-        
         return (crop_x, crop_y, crop_size, dest_rect)
 
     def process_hover(self, event):
         now = time.time()
         if (now - self.last_process_time) < 0.005: return
         self.last_process_time = now
-
         geom = self._calculate_geometry(event.globalPos())
         if not geom: return
-        
         _, _, _, dest_rect = geom
         self.main_viewport.update_cursor_pos(dest_rect)
 
-    # --- MEZCLA MANUAL DE CAPAS CON INTERSECCIÓN ---
     def get_manual_projection(self, doc, x, y, w, h):
-        """
-        Versión Definitiva: Usa intersección para mapear
-        coordenadas negativas/off-canvas sin errores de desplazamiento.
-        """
         view_rect = QRect(x, y, w, h)
         final_image = QImage(w, h, QImage.Format_ARGB32_Premultiplied)
         final_image.fill(Qt.transparent)
-        
         painter = QPainter(final_image)
         painter.setRenderHint(QPainter.Antialiasing, False)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
@@ -505,57 +437,40 @@ class InputInterceptor(QObject):
         def render_node_recursive(node):
             for child in node.childNodes():
                 if not child.visible(): continue
-                
-                # GRUPOS (Recursividad)
                 if "Group" in child.type():
                     render_node_recursive(child)
-                
-                # CAPAS DE PINTURA
                 else:
                     layer_bounds = child.bounds()
                     if layer_bounds.isEmpty(): continue
-
-                    # INTERSECCIÓN EXACTA
                     rect_visible = view_rect.intersected(layer_bounds)
                     if rect_visible.isEmpty(): continue
-                    
-                    # Pedir SOLO los píxeles existentes
                     pixel_data = child.pixelData(
                         rect_visible.x(), rect_visible.y(), 
                         rect_visible.width(), rect_visible.height()
                     )
-                    
                     if not pixel_data: continue
-                    
                     rw = rect_visible.width()
                     rh = rect_visible.height()
                     expected_len = rw * rh
-                    
                     layer_img = None
                     if len(pixel_data) == expected_len * 4:
                         layer_img = QImage(pixel_data, rw, rh, QImage.Format_RGBA8888).rgbSwapped()
                     elif len(pixel_data) == expected_len * 8:
                         layer_img = QImage(pixel_data, rw, rh, rw * 8, QImage.Format_RGBA64).rgbSwapped()
-                    
                     if layer_img and not layer_img.isNull():
                         if layer_img.format() != QImage.Format_ARGB32_Premultiplied:
                             layer_img = layer_img.convertToFormat(QImage.Format_ARGB32_Premultiplied)
-                        
-                        # POSICIÓN RELATIVA CORRECTA
                         target_x = rect_visible.x() - view_rect.x()
                         target_y = rect_visible.y() - view_rect.y()
-                        
                         painter.setOpacity(child.opacity() / 255.0)
                         mode_str = child.blendingMode()
                         comp_mode = BLEND_MODES_MAP.get(mode_str, QPainter.CompositionMode_SourceOver)
                         painter.setCompositionMode(comp_mode)
-                        
                         painter.drawImage(target_x, target_y, layer_img)
 
         root = doc.rootNode()
         if root:
             render_node_recursive(root)
-            
         painter.end()
         return final_image
 
@@ -563,17 +478,13 @@ class InputInterceptor(QObject):
         now = time.time()
         if (now - self.last_process_time) < self.min_interval: return
         self.last_process_time = now
-
         geom = self._calculate_geometry(event.globalPos())
         if not geom: return
-        
         crop_x, crop_y, crop_size, dest_rect = geom
-        
         doc = self.app_ref.activeDocument()
         qimg_patch = None
-        
         if doc:
-            if self.source_mode == 0: # Capa Actual
+            if self.source_mode == 0: 
                 node = doc.activeNode()
                 if node:
                     pixel_data = node.pixelData(crop_x, crop_y, crop_size, crop_size)
@@ -582,13 +493,11 @@ class InputInterceptor(QObject):
                         qimg_patch = QImage(pixel_data, crop_size, crop_size, QImage.Format_RGBA8888).rgbSwapped()
                     elif len_data == crop_size * crop_size * 8:
                         qimg_patch = QImage(pixel_data, crop_size, crop_size, crop_size * 8, QImage.Format_RGBA64).rgbSwapped()
-            else: # Imagen Completa (Manual Blend)
+            else: 
                 qimg_patch = self.get_manual_projection(doc, crop_x, crop_y, crop_size, crop_size)
-
         if qimg_patch:
             self.camera_preview.update_image(qimg_patch)
             self.main_viewport.stamp_trail(qimg_patch, dest_rect, dest_rect)
-            
             transform = self.get_current_view_transform()
             self.live_patch_ready.emit(qimg_patch, crop_x, crop_y, crop_size, crop_size, transform)
 
@@ -602,11 +511,9 @@ class InputInterceptor(QObject):
             zoom = canvas.zoomLevel()
             rotation = canvas.rotation()
             mirror = canvas.mirror()
-            
             scale_factor = (72.0 / res) * zoom
             t_flake = view.flakeToCanvasTransform()
             origin = t_flake.map(QPointF(0.0, 0.0))
-
             transform = QTransform()
             transform.translate(origin.x(), origin.y())
             transform.rotate(rotation)
@@ -624,23 +531,18 @@ class InputInterceptor(QObject):
             view = app.activeWindow().activeView()
             if not doc or not view: return None
             canvas = view.canvas()
-            
             target_widget = QApplication.widgetAt(global_pos)
             if target_widget and target_widget != self.main_viewport: pass 
             else: target_widget = QApplication.focusWidget() or app.activeWindow().qwindow().centralWidget()
             if not target_widget: return None
-
             local_pos = target_widget.mapFromGlobal(global_pos)
             t_flake = view.flakeToCanvasTransform()
             origin = t_flake.map(QPointF(0.0, 0.0))
-            
             res = doc.resolution() or 72.0
             zoom = canvas.zoomLevel()
             scale_factor = (72.0 / res) * zoom
-            
             doc_x_scaled = local_pos.x() - origin.x()
             doc_y_scaled = local_pos.y() - origin.y()
-            
             rotation = canvas.rotation()
             if rotation != 0:
                 angle_rad = -rotation * 3.14159265359 / 180.0
@@ -650,7 +552,6 @@ class InputInterceptor(QObject):
                 ty = doc_x_scaled * sin_a + doc_y_scaled * cos_a
                 doc_x_scaled = tx
                 doc_y_scaled = ty
-            
             if canvas.mirror(): doc_x_scaled = -doc_x_scaled
             return QPointF(doc_x_scaled / scale_factor, doc_y_scaled / scale_factor)
         except: return None
@@ -670,8 +571,6 @@ class CameraMonitorDocker(DockWidget):
         self.setWidget(self.baseWidget)
         
         self.current_color = QColor(0, 0, 255) # Azul por defecto
-        
-        # Ruta del archivo de configuración (mismo directorio que el script)
         self.settings_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "infinite_canvas_settings.txt")
 
         # --- TOOLBAR 1 ---
@@ -684,7 +583,7 @@ class CameraMonitorDocker(DockWidget):
         self.btn_active.setText("Enable")
         self.btn_active.setCheckable(True)
         self.btn_active.clicked.connect(self.toggle_tracking)
-        self.btn_active.clicked.connect(self.save_settings) # Guardar al cambiar estado
+        self.btn_active.clicked.connect(self.save_settings)
         
         self.combo_size = QComboBox()
         self.combo_size.addItems(["Normal (1x)", "Wide (3x)", "Ultra (5x)"])
@@ -777,7 +676,16 @@ class CameraMonitorDocker(DockWidget):
         self.interceptor = InputInterceptor(self.view_state, self.main_viewport, self.camera_preview)
         self.interceptor.stroke_finished.connect(self.on_stroke_finished)
         self.interceptor.live_patch_ready.connect(self.relay_patch_to_overlay)
-        self.interceptor.action_triggered.connect(self.on_history_action) 
+        
+        # --- CONEXIÓN A ACCIONES DE KRITA (Undo/Redo/Etc) ---
+        try:
+            action_names = ['edit_undo', 'edit_redo', 'clear', 'edit_cut', 'edit_paste']
+            for name in action_names:
+                ac = Krita.instance().action(name)
+                if ac:
+                    ac.triggered.connect(self.on_history_action)
+        except Exception as e:
+            print(f"Error conectando acciones: {e}")
         
         self.main_viewport.contentChanged.connect(self.refresh_overlay)
         
@@ -792,9 +700,7 @@ class CameraMonitorDocker(DockWidget):
         self.monitor_timer.setInterval(100) 
         self.monitor_timer.timeout.connect(self.check_bounds_change)
         
-        # Cargar configuración al iniciar
         self.load_settings()
-        # Forzar actualizaciones iniciales
         self.update_settings()
 
     def select_color(self):
@@ -805,37 +711,34 @@ class CameraMonitorDocker(DockWidget):
             self.update_overlay_settings()
             self.save_settings()
 
-    # --- NUEVO SISTEMA DE GUARDADO EN ARCHIVO TXT (JSON) ---
     def save_settings(self):
-        data = {
-            "is_active": self.btn_active.isChecked(),
-            "size_index": self.combo_size.currentIndex(),
-            "source_index": self.combo_source.currentIndex(),
-            "reticle": self.chk_reticle.isChecked(),
-            "overlay": self.chk_overlay.isChecked(),
-            "no_color": self.chk_no_color.isChecked(),
-            "crop": self.chk_crop.isChecked(),
-            "outline": self.chk_outline.isChecked(),
-            "opacity": self.slider_opacity.value(),
-            "color": self.current_color.name()
-        }
         try:
+            # Check if button exists before accessing
+            if not self.btn_active: return
+            
+            data = {
+                "is_active": self.btn_active.isChecked(),
+                "size_index": self.combo_size.currentIndex(),
+                "source_index": self.combo_source.currentIndex(),
+                "reticle": self.chk_reticle.isChecked(),
+                "overlay": self.chk_overlay.isChecked(),
+                "no_color": self.chk_no_color.isChecked(),
+                "crop": self.chk_crop.isChecked(),
+                "outline": self.chk_outline.isChecked(),
+                "opacity": self.slider_opacity.value(),
+                "color": self.current_color.name()
+            }
             with open(self.settings_path, 'w') as f:
                 json.dump(data, f)
         except Exception as e:
             print(f"Error guardando configuración: {e}")
 
     def load_settings(self):
-        if not os.path.exists(self.settings_path):
-            return # No hay config previa, usar defaults
-
+        if not os.path.exists(self.settings_path): return
         try:
             with open(self.settings_path, 'r') as f:
                 data = json.load(f)
-
-            self.blockSignals(True) # Evitar guardar mientras cargamos
-
-            # Cargar valores
+            self.blockSignals(True)
             self.combo_size.setCurrentIndex(data.get("size_index", 0))
             self.combo_source.setCurrentIndex(data.get("source_index", 0))
             self.chk_reticle.setChecked(data.get("reticle", True))
@@ -844,42 +747,61 @@ class CameraMonitorDocker(DockWidget):
             self.chk_crop.setChecked(data.get("crop", False))
             self.chk_outline.setChecked(data.get("outline", False))
             self.slider_opacity.setValue(data.get("opacity", 100))
-
             color_name = data.get("color", "#0000ff")
             self.current_color = QColor(color_name)
             self.btn_color.setStyleSheet(f"background-color: {self.current_color.name()}; border: 1px solid gray;")
-
-            # Estado Activado/Desactivado
             was_active = data.get("is_active", False)
             self.btn_active.setChecked(was_active)
             if was_active:
                 self.btn_active.setText("Disable")
-                self.toggle_tracking() # Ejecuta la lógica de activación
+                self.toggle_tracking()
             else:
                 self.btn_active.setText("Enable")
-
             self.blockSignals(False)
-            
-            # Aplicar visualmente
             self.update_settings()
             self.update_visibility()
             self.update_overlay_settings()
-
         except Exception as e:
             print(f"Error cargando configuración: {e}")
 
     def canvasChanged(self, canvas):
+        # SAFETY CHECK: Si los widgets han sido borrados, salir inmediatamente
+        try:
+            if not self.chk_overlay or not self.main_viewport: return
+        except RuntimeError:
+            return
+
         if canvas:
             self.update_full_canvas(force=True)
-            if self.chk_overlay.isChecked():
-                self.toggle_overlay(False)
-                QTimer.singleShot(100, lambda: self.toggle_overlay(True))
+            
+            # PROTECCIÓN DE ERROR "wrapped C/C++ object ... deleted"
+            try:
+                if self.chk_overlay.isChecked():
+                    self.toggle_overlay(False)
+                    
+                    def safe_reenable():
+                        try:
+                            # Volvemos a chequear si existe el widget antes de usarlo
+                            if self.chk_overlay and self.chk_overlay.isChecked():
+                                self.toggle_overlay(True)
+                        except RuntimeError:
+                            pass
+
+                    QTimer.singleShot(100, safe_reenable)
+            except RuntimeError:
+                pass
         else:
-            self.main_viewport.set_base_background(None)
+            try:
+                self.main_viewport.set_base_background(None)
+            except RuntimeError:
+                pass
 
     def relay_patch_to_overlay(self, image, x, y, w, h, transform):
-        if self.overlay and self.overlay.isVisible():
-            self.overlay.handle_live_patch(image, x, y, w, h, transform)
+        try:
+            if self.overlay and self.overlay.isVisible():
+                self.overlay.handle_live_patch(image, x, y, w, h, transform)
+        except RuntimeError:
+            self.overlay = None
 
     def update_settings(self):
         size_idx = self.combo_size.currentIndex()
@@ -887,7 +809,6 @@ class CameraMonitorDocker(DockWidget):
         if size_idx == 1: mult = 3
         if size_idx == 2: mult = 5
         self.interceptor.set_multiplier(mult)
-        
         mode = self.combo_source.currentIndex()
         self.interceptor.set_mode(mode)
 
@@ -897,16 +818,17 @@ class CameraMonitorDocker(DockWidget):
 
     def update_overlay_settings(self):
         if self.overlay:
-            opacity = self.slider_opacity.value() / 100.0
-            crop = self.chk_crop.isChecked()
-            outline = self.chk_outline.isChecked()
-            no_color = self.chk_no_color.isChecked()
-            mode = self.combo_source.currentIndex()
-            self.overlay.set_overlay_settings(opacity, crop, outline, self.current_color, no_color, mode)
+            try:
+                opacity = self.slider_opacity.value() / 100.0
+                crop = self.chk_crop.isChecked()
+                outline = self.chk_outline.isChecked()
+                no_color = self.chk_no_color.isChecked()
+                mode = self.combo_source.currentIndex()
+                self.overlay.set_overlay_settings(opacity, crop, outline, self.current_color, no_color, mode)
+            except RuntimeError:
+                self.overlay = None
 
     def toggle_tracking(self):
-        # Nota: Al llamar toggle_tracking manualmente en load_settings,
-        # isChecked() ya estará establecido correctamente.
         is_active = self.btn_active.isChecked()
         if is_active:
             self.btn_active.setText("Disable")
@@ -921,20 +843,31 @@ class CameraMonitorDocker(DockWidget):
             self.monitor_timer.stop()
 
     def on_stroke_finished(self):
-        QTimer.singleShot(10, lambda: self.update_full_canvas(force=True))
+        self.view_state.last_bounds_hash = None
+        
+        def safe_update():
+            try: self.update_full_canvas(force=True)
+            except RuntimeError: pass
+
+        self.update_full_canvas(force=True)
+        QTimer.singleShot(100, safe_update)
         
     def on_history_action(self):
-        QTimer.singleShot(10, lambda: self.update_full_canvas(force=False))
+        self.view_state.last_bounds_hash = None
+        
+        def safe_update():
+            try: self.update_full_canvas(force=True)
+            except RuntimeError: pass
+            
+        QTimer.singleShot(100, safe_update)
 
     def check_bounds_change(self):
         if self.combo_source.currentIndex() == 1: return
-
         try:
             doc = Krita.instance().activeDocument()
             if not doc: return
             node = doc.activeNode()
             if not node: return
-            
             bounds = node.bounds()
             x, y, w, h = bounds.x(), bounds.y(), bounds.width(), bounds.height()
             if w <= 0: x, y, w, h = 0, 0, doc.width(), doc.height()
@@ -945,20 +878,13 @@ class CameraMonitorDocker(DockWidget):
         except:
             pass
 
-    # --- MÉTODO CORREGIDO: CÁLCULO DE LÍMITES REALES ---
     def calculate_total_bounds(self, doc):
-        """
-        Calcula la caja envolvente (Bounding Box) de todo el documento,
-        incluyendo áreas fuera del canvas (coordenadas negativas).
-        """
         total_rect = QRect()
         hay_contenido = False
-        
         def crawl_bounds(node):
             nonlocal total_rect, hay_contenido
             for child in node.childNodes():
                 if not child.visible(): continue
-                
                 if "Group" in child.type():
                     crawl_bounds(child)
                 else:
@@ -969,47 +895,43 @@ class CameraMonitorDocker(DockWidget):
                             hay_contenido = True
                         else:
                             total_rect = total_rect.united(b)
-
         root = doc.rootNode()
         if root:
             crawl_bounds(root)
-            
         if not hay_contenido:
             return 0, 0, doc.width(), doc.height()
-            
         return total_rect.x(), total_rect.y(), total_rect.width(), total_rect.height()
 
-    # --- MÉTODO CORREGIDO: ACTUALIZACIÓN DEL CANVAS CON MANUAL BLEND ---
     def update_full_canvas(self, force=False):
+        try:
+            # SAFETY CHECK: Si main_viewport no existe, abortar
+            if not self.main_viewport: return
+            # Verificar si C++ object ha sido borrado
+            _ = self.main_viewport.isVisible() 
+        except RuntimeError:
+            return
+
         try:
             doc = Krita.instance().activeDocument()
             if not doc: return
-            
             mode = self.combo_source.currentIndex()
-            
-            # 1. CALCULAR GEOMETRÍA REAL (INCLUYENDO OFF-CANVAS)
-            if mode == 0: # Capa Actual
+            if mode == 0:
                 node = doc.activeNode()
                 if not node: return
                 bounds = node.bounds()
                 x, y, w, h = bounds.x(), bounds.y(), bounds.width(), bounds.height()
                 if w <= 0: x, y, w, h = 0, 0, doc.width(), doc.height()
-            else: # Imagen Completa (Recursive Bounds)
+            else:
                 x, y, w, h = self.calculate_total_bounds(doc)
 
-            # Detectar cambios
             self.view_state.last_bounds_hash = (x, y, w, h)
-
-            # Calcular escala para el buffer del widget
             scale_ratio = 1.0
             max_dim = max(w, h)
             if max_dim > MAX_BUFFER_SIZE:
                 scale_ratio = MAX_BUFFER_SIZE / float(max_dim)
-            
             target_w = int(w * scale_ratio)
             target_h = int(h * scale_ratio)
             
-            # Inicializar buffers si cambió el tamaño
             if not self.main_viewport.trail_buffer or \
                self.main_viewport.trail_buffer.width() != target_w or \
                self.main_viewport.trail_buffer.height() != target_h:
@@ -1021,21 +943,15 @@ class CameraMonitorDocker(DockWidget):
             self.view_state.offset_y = 0 
             self.view_state.valid = True
             
-            # 2. GENERACIÓN DE LA IMAGEN DE FONDO (MANUAL BLEND)
             if force or target_w > 0:
                 full_img = None
-                
-                if mode == 0: # Capa actual
+                if mode == 0: 
                     node = doc.activeNode()
                     if node:
                         full_img = node.thumbnail(target_w, target_h)
                 else:
-                    # MODO IMAGEN COMPLETA: MANUAL BLEND RECURSIVO
-                    # Generamos la imagen a FULL RESOLUTION primero (lento pero preciso)
                     full_res_img = self.interceptor.get_manual_projection(doc, x, y, w, h)
-                    
                     if full_res_img:
-                        # Escalamos el resultado para que quepa en el visor
                         full_img = QImage(full_res_img)
                         if full_img.width() != target_w or full_img.height() != target_h:
                              full_img = full_img.scaled(
@@ -1043,20 +959,21 @@ class CameraMonitorDocker(DockWidget):
                                  Qt.KeepAspectRatio, 
                                  Qt.SmoothTransformation
                              )
-
-                # 3. ACTUALIZAR VIEWPORT
                 if full_img:
                      self.main_viewport.set_base_background(QPixmap.fromImage(full_img))
-                
                 if self.overlay:
                     self.overlay.clear_live_buffer()
-
         except Exception as e:
-            print(f"Error en update_full_canvas: {e}")
+            # Imprimir el error para debug, pero no romper la ejecución
+            # print(f"Error en update_full_canvas: {e}")
+            pass
 
     def refresh_overlay(self):
-        if self.overlay and self.overlay.isVisible():
-            self.overlay.update()
+        try:
+            if self.overlay and self.overlay.isVisible():
+                self.overlay.update()
+        except RuntimeError:
+            self.overlay = None
 
     def find_canvas_viewport(self):
         try:
@@ -1075,26 +992,34 @@ class CameraMonitorDocker(DockWidget):
         return None
 
     def toggle_overlay(self, checked):
-        if checked:
-            self.target_viewport = self.find_canvas_viewport()
-            if self.target_viewport:
+        # PROTECCIÓN COMPLETA CONTRA OBJETOS BORRADOS
+        try:
+            if checked:
+                self.target_viewport = self.find_canvas_viewport()
+                if self.target_viewport:
+                    if self.overlay:
+                        try: self.overlay.close()
+                        except: pass
+                    self.overlay = OverlayWidget(self, parent=self.target_viewport)
+                    self.update_overlay_settings() 
+                    self.overlay.show()
+                    self.overlay.raise_()
+                    self.sync_timer.start(16)
+                else:
+                    # Si no hay viewport, intentamos desmarcar, pero verificando que exista
+                    if self.chk_overlay:
+                        self.chk_overlay.setChecked(False)
+            else:
                 if self.overlay:
                     try: self.overlay.close()
                     except: pass
-                self.overlay = OverlayWidget(self, parent=self.target_viewport)
-                self.update_overlay_settings() 
-                self.overlay.show()
-                self.overlay.raise_()
-                self.sync_timer.start(16)
-            else:
-                self.chk_overlay.setChecked(False)
-        else:
-            if self.overlay:
-                try: self.overlay.close()
-                except: pass
-            self.overlay = None
-            self.sync_timer.stop()
-            if self.target_viewport: self.target_viewport.update()
+                self.overlay = None
+                self.sync_timer.stop()
+                if self.target_viewport:
+                    try: self.target_viewport.update()
+                    except: pass
+        except RuntimeError:
+            pass
 
     def sync_overlay_geometry(self):
         if not self.target_viewport: return
@@ -1112,7 +1037,8 @@ class CameraMonitorDocker(DockWidget):
             except RuntimeError:
                 self.overlay = None
                 self.sync_timer.stop()
-                self.chk_overlay.setChecked(False)
+                try: self.chk_overlay.setChecked(False)
+                except: pass
 
 class CameraEraserFixFactory(DockWidgetFactoryBase):
     def __init__(self):
