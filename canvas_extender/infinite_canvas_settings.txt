@@ -1,0 +1,1 @@
+{"is_active": true, "size_index": 1, "source_index": 1, "reticle": false, "overlay": true, "no_color": true, "crop": true, "outline": true, "opacity": 68, "color": "#0000ff"}
