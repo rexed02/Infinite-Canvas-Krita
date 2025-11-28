@@ -29,3 +29,5 @@ Show only the current layer
 - Undo and redo doesn't work well on Full Document mode. The update is only achieved after release detection when painting.
 - Not All the brushes work for real time updates and idk why so it will stay as it is
 - This plugin is made for 8bit/depth chanel
+
+<img width="3508" height="2480" alt="sdsfgdh" src="https://github.com/user-attachments/assets/18113a07-df42-4a00-a1e1-a132d1a4475f" />
